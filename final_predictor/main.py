@@ -1,10 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Mon Nov  5 16:38:14 2018
-
-@author: roman
-"""
 import pickle
 import json
 import numpy as np
