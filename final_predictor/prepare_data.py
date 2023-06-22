@@ -1,9 +1,4 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Tue Oct 16 21:15:58 2018
-@author: roman
-"""
+
 import numpy as np
 import pandas as pd
 from datetime import timedelta
