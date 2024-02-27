@@ -211,50 +211,66 @@ if __name__ == '__main__':
     for row in reader:
         available_stock.append(row)
     # getting all tickers from stocks
-    stock_ticker = []
+    all_stock_ticker = []
     for item in available_stock:
-        stock_ticker.append(item[0])
+        all_stock_ticker.append(item[0])
+
+
+    r = open('stock.csv', 'r')
+    reader = csv.reader(r)
+    nse_stocks_ticker = []
+
+    for item in available_stock:
+        if '.NS' in item[0]:
+            nse_stocks_ticker.append(item[0])
 
     # print(stock_ticker)
 
     # #dataset selection
-    selected_stock = st.selectbox("Select Dataset for Prediction",
-                                   stock_ticker)  # selectbox will assign a value to that variable
+    selected_stock = ''
+    stock_type = ['Select the available options', 'All Stocks', 'NSE Stocks']
+    selected_stock_type = st.selectbox("Select Stock Types",
+                                  stock_type)
+
+    if(selected_stock_type == 'All Stocks'):
+        selected_stock = st.selectbox("Select Dataset for Prediction",
+                                   all_stock_ticker)  # selectbox will assign a value to that variable
+
+    elif selected_stock_type == 'NSE Stocks':
+        selected_stock = st.selectbox("Select Dataset for Prediction",
+                                          nse_stocks_ticker)  # selectbox will assign a value to that variable
 
 
     # #load stock data
     @st.cache
     def load_data(ticker):
-        data = yf.download(ticker, START, TODAY)
-        data.reset_index(inplace=True)
-        return data
+        if ticker != '':
+            data = yf.download(ticker, START, TODAY)
+            data.reset_index(inplace=True)
+            return data
+        st.write("Select the stocks")
 
+    if selected_stock !='':
+        data_load_state = st.text("Load data...")
 
-    data_load_state = st.text("Load data...")
+        data = load_data(selected_stock)
+        data_load_state.text("Results are...")
 
-    data = load_data(selected_stock)
-    data_load_state.text("Results are...")
+        # #calling raw data
+        st.subheader('Stocks Details')
+        stock_price=data
+        stock_price.reset_index()
+        stock_price = data.sort_values(by='Date', ascending=False)
+        print("________stock_price_data______________")
+        stock_price['Date'] = stock_price['Date'].apply(lambda x: x.strftime('%Y-%m-%d'))
+        # print(stock_price.columns)
+        # print(stock_price)
 
-    # #calling raw data
-    st.subheader('Stocks Details')
-    stock_price=data
-    stock_price.reset_index()
-    stock_price = data.sort_values(by='Date', ascending=False)
-    print("________stock_price_data______________")
-    stock_price['Date'] = stock_price['Date'].apply(lambda x: x.strftime('%Y-%m-%d'))
-    # print(stock_price.columns)
-    print(stock_price)
+        st.write(stock_price)
+        # st.write(data)
 
-    st.write(stock_price)
-    # st.write(data)
-
-    # print(type(data))
-    data.to_csv('stock_data.csv', index=False)
-
-
-
-
-
+        # print(type(data))
+        data.to_csv('stock_data.csv', index=False)
 
 
 
@@ -269,116 +285,200 @@ if __name__ == '__main__':
 
 
 
-    #####################################################3
-    # # df = pd.read_csv('GOOG.csv')
-    dataset_revised, crashes = get_data_revised(data, crash_threshold)
-    #
-    print("____________revised dataset____________")
-    print(dataset_revised)
-
-    # print('crashes..............')
-    # print(crashes)
-
-    st.write("CRASH HISTORY of " + selected_stock)
-
-    crash_history = crashes[0].copy(deep=True)
-
-    crash_history['crash_st'] = crash_history['crash_st'].apply(lambda x: x.strftime('%Y-%m-%d'))
-    crash_history['crash_end'] = crash_history['crash_end'].apply(lambda x: x.strftime('%Y-%m-%d'))
-
-    # crash_history = crash_history.rename_axis('Date')
-    # crash_history.reset_index('crash_st')
-    # crash_history= st.dataframe(crash_history, hide_index=True)
-    st.write(crash_history)
-    print('_______________crash history..............')
-    print(crash_history)
 
 
-    dfs_x, dfs_y = get_dfs_xy_predict(dataset_revised, crashes, months)
-    #     print(dfs_x)
 
-    X, _, _, _ = get_train_test(dfs_x, dfs_y, test_data=None)
 
-    y_pred_weighted_all = []
-    #
-    # #     ##################################################################################
-    #
-    # #     ########################---------- analyzing in model ---------- #########################
-    for month, model in zip(months, models):
-        model = pickle.load(open(model, 'rb'))
-        y_pred_bin = model.predict(X).astype(int)
-        y_pred_weighted = []
-        for i in range(-n_plot, -1):
-            y_pred_bin_ = y_pred_bin[:i]
-            y_pred_weighted.append(np.dot(np.linspace(0, 1, 21) / \
-                                          sum(np.linspace(0, 1, n_lookback)), y_pred_bin_[-n_lookback:]))
-        y_pred_weighted.append(np.dot(np.linspace(0, 1, n_lookback) / \
-                                      sum(np.linspace(0, 1, n_lookback)), y_pred_bin[-n_lookback:]))
-        y_pred_weighted_all.append(y_pred_weighted)
-    #
-    # #     ##############################################################################################
-    #
-    # print("y_pred_weighted_all[0]--------------------------------------")
-    # print(y_pred_weighted_all[0])
-    #
-    # print("y_pred_weighted_all[1]--------------------------------------")
-    # print(y_pred_weighted_all[1])
-    #
-    # print("y_pred_weighted_all[2]--------------------------------------")
-    # print(y_pred_weighted_all[2])
-    #
-    # ########################---------- print and plot results ---------- #########################
-    df = dataset_revised[0].iloc[-n_plot:, :]
-    df['y_pred_weighted_1m'] = y_pred_weighted_all[0]
-    df['y_pred_weighted_3m'] = y_pred_weighted_all[1]
-    df['y_pred_weighted_6m'] = y_pred_weighted_all[2]
-    last_date = str(df.index[-1])[:10]
-    #
-    # #     last_date="2023-10-30"
-    #
-    dataset_name = selected_stock
-    #
-    print(str(dataset_name) + ' crash prediction ' + str(model_name) + ' model as of ' \
-          + str(last_date))
-    print('probabilities as weighted average of binary predictions over last ' \
-          + str(n_lookback) + str(' days'))
-    print('* crash within 6 months: ' + str(np.round(100 \
-                                                     * df['y_pred_weighted_6m'][-1], 2)) + '%')
-    print('* crash within 3 months: ' + str(np.round(100 \
-                                                     * df['y_pred_weighted_3m'][-1], 2)) + '%')
-    print('* crash within 1 month:  ' + str(np.round(100 \
-                                                     * df['y_pred_weighted_1m'][-1], 2)) + '%')
 
-    st.subheader("Crash Predictor ")
-    st.write(selected_stock +" crash prediction Logistic Regression model as of " + TODAY)
-    st.write("crash within 1 months: " + str(np.round(100 * df['y_pred_weighted_1m'][-1], 2)) + '%')
-    st.write("crash within 3 months: " + str(np.round(100 * df['y_pred_weighted_3m'][-1], 2)) + '%')
-    st.write("crash within 6 months: " + str(np.round(100 * df['y_pred_weighted_6m'][-1], 2)) + '%')
-    #
-    print("---------------df---------------------------")
-    print(df)
+        #####################################################3
+        # # df = pd.read_csv('GOOG.csv')
+        dataset_revised, crashes = get_data_revised(data, crash_threshold)
+        #
+        print("____________revised dataset____________")
+        # print(dataset_revised)
 
-    plt.style.use('seaborn-darkgrid')
-    rcParams['figure.figsize'] = 10, 10
-    rcParams.update({'font.size': 10})
+        # print('crashes..............')
+        # print(crashes)
 
-    gs = gridspec.GridSpec(3, 1, height_ratios=[2.5, 1, 1])
-    plt.subplot(gs[0])
-    plt.plot(df['price'], color='blue')
-    plt.ylabel(str(dataset_name) + ' index')
-    plt.title(str(dataset_name) + ' crash prediction ' + str(model_name) + ' ' \
+        st.write("CRASH HISTORY of " + selected_stock)
+
+        crash_history = crashes[0].copy(deep=True)
+
+        crash_history['crash_st'] = crash_history['crash_st'].apply(lambda x: x.strftime('%Y-%m-%d'))
+        crash_history['crash_end'] = crash_history['crash_end'].apply(lambda x: x.strftime('%Y-%m-%d'))
+
+        # crash_history = crash_history.rename_axis('Date')
+        # crash_history.reset_index('crash_st')
+        # crash_history= st.dataframe(crash_history, hide_index=True)
+        st.write(crash_history)
+        print('_______________crash history..............')
+        # print(crash_history)
+
+
+        dfs_x, dfs_y = get_dfs_xy_predict(dataset_revised, crashes, months)
+        #     print(dfs_x)
+
+        X, _, _, _ = get_train_test(dfs_x, dfs_y, test_data=None)
+
+        y_pred_weighted_all = []
+        #
+        # #     ##################################################################################
+        #
+        # #     ########################---------- analyzing in model ---------- #########################
+        for month, model in zip(months, models):
+            model = pickle.load(open(model, 'rb'))
+            y_pred_bin = model.predict(X).astype(int)
+            y_pred_weighted = []
+            for i in range(-n_plot, -1):
+                y_pred_bin_ = y_pred_bin[:i]
+                y_pred_weighted.append(np.dot(np.linspace(0, 1, 21) / \
+                                              sum(np.linspace(0, 1, n_lookback)), y_pred_bin_[-n_lookback:]))
+            y_pred_weighted.append(np.dot(np.linspace(0, 1, n_lookback) / \
+                                          sum(np.linspace(0, 1, n_lookback)), y_pred_bin[-n_lookback:]))
+            y_pred_weighted_all.append(y_pred_weighted)
+        #
+        # #     ##############################################################################################
+        #
+        # print("y_pred_weighted_all[0]--------------------------------------")
+        # print(y_pred_weighted_all[0])
+        #
+        # print("y_pred_weighted_all[1]--------------------------------------")
+        # print(y_pred_weighted_all[1])
+        #
+        # print("y_pred_weighted_all[2]--------------------------------------")
+        # print(y_pred_weighted_all[2])
+        #
+        # ########################---------- print and plot results ---------- #########################
+        df = dataset_revised[0].iloc[-n_plot:, :]
+        df1 = dataset_revised[0].iloc[:, :]
+        df['y_pred_weighted_1m'] = y_pred_weighted_all[0]
+        df['y_pred_weighted_3m'] = y_pred_weighted_all[1]
+        df['y_pred_weighted_6m'] = y_pred_weighted_all[2]
+        last_date = str(df.index[-1])[:10]
+        #
+        # #     last_date="2023-10-30"
+        #
+        dataset_name = selected_stock
+        #
+        print(str(dataset_name) + ' crash prediction ' + str(model_name) + ' model as of ' \
               + str(last_date))
-    plt.xticks([])
+        print('probabilities as weighted average of binary predictions over last ' \
+              + str(n_lookback) + str(' days'))
+        print('* crash within 6 months: ' + str(np.round(100 \
+                                                         * df['y_pred_weighted_6m'][-1], 2)) + '%')
+        print('* crash within 3 months: ' + str(np.round(100 \
+                                                         * df['y_pred_weighted_3m'][-1], 2)) + '%')
+        print('* crash within 1 month:  ' + str(np.round(100 \
+                                                         * df['y_pred_weighted_1m'][-1], 2)) + '%')
 
-    plt.subplot(gs[1])
-    plt.plot(df['y_pred_weighted_6m'], color='salmon')
-    plt.plot(df['y_pred_weighted_3m'], color='red')
-    plt.plot(df['y_pred_weighted_1m'], color='brown')
-    plt.ylabel('crash probability')
-    plt.ylim([0, 1.1])
-    plt.xticks(rotation=45)
-    plt.legend(['crash in 6 months', 'crash in 3 months', 'crash in 1 month'])
-    plt.show()
+        st.subheader("Crash Predictor ")
+        st.write(selected_stock +" crash prediction Logistic Regression model as of " + TODAY)
+        st.write("crash within 1 months: " + str(np.round(100 * df['y_pred_weighted_1m'][-1], 2)) + '%')
+        st.write("crash within 3 months: " + str(np.round(100 * df['y_pred_weighted_3m'][-1], 2)) + '%')
+        st.write("crash within 6 months: " + str(np.round(100 * df['y_pred_weighted_6m'][-1], 2)) + '%')
+        #
+        print("---------------df---------------------------")
+        # print(df)
 
-    fig = plt.gcf()
-    st.pyplot(fig)
+        # plt.style.use('seaborn-darkgrid')
+        # rcParams['figure.figsize'] = 10, 10
+        # rcParams.update({'font.size': 10})
+        #
+        # gs = gridspec.GridSpec(3, 1, height_ratios=[2.5, 1, 1])
+        # plt.subplot(gs[0])
+        # plt.plot(df['price'], color='blue')
+        # plt.ylabel(str(dataset_name) + ' index')
+        # plt.title(str(dataset_name) + ' crash prediction ' + str(model_name) + ' ' \
+        #           + str(last_date))
+        # plt.xticks([])
+        #
+        # plt.subplot(gs[1])
+        # plt.plot(df['y_pred_weighted_6m'], color='salmon')
+        # plt.plot(df['y_pred_weighted_3m'], color='red')
+        # plt.plot(df['y_pred_weighted_1m'], color='brown')
+        # plt.ylabel('crash probability')
+        # plt.ylim([0, 1.1])
+        # plt.xticks(rotation=45)
+        # plt.legend(['crash in 6 months', 'crash in 3 months', 'crash in 1 month'])
+        # plt.show()
+        #
+        # fig = plt.gcf()
+        # st.pyplot(fig)
+        #
+        #
+        #
+        # # rcParams['figure.figsize'] = 10, 6
+        # gs = gridspec.GridSpec(2, 1, height_ratios=[2.5, 1])
+        # #
+        # plt.subplot(gs[0])
+        # plt.plot(df1['norm'], color='blue')
+        # [plt.axvspan(x1, x2, alpha=0.5, color='red') for x1, x2 in zip(crash_history['crash_st'], crash_history['crash_end'])]
+        # plt.plot(df1['drawdown'], color='red', marker='v',linestyle='')
+        # plt.title(' - crashes: Weibull outliers')
+        # plt.grid()
+        # plt.xticks([])
+        # plt.legend(['Price', 'Drawdown'])
+        # plt.subplot(gs[1])
+        # plt.plot(df1['vol'])
+        # [plt.axvspan(x1, x2, alpha=0.5, color='red') for x1, x2 in zip(crash_history['crash_st'], crash_history['crash_end'])]
+        # plt.legend(['Volatility'])
+        # plt.grid()
+        # plt.tight_layout()
+        # plt.show()
+        # #
+        # fig2 = plt.gcf()
+        # st.pyplot(fig2)
+
+
+        plt.style.use('seaborn-darkgrid')
+        rcParams['figure.figsize'] = 10, 10
+        rcParams.update({'font.size': 10})
+
+        fig, ax = plt.subplots()
+        gs = gridspec.GridSpec(3, 1, height_ratios=[2.5, 1, 1])
+        plt.subplot(gs[0])
+        plt.plot(df['price'], color='blue')
+        plt.ylabel(str(dataset_name) + ' index')
+        plt.title(str(dataset_name) + ' crash prediction ' + str(model_name) + ' ' \
+                  + str(last_date))
+        plt.xticks([])
+
+        plt.subplot(gs[1])
+        plt.plot(df['y_pred_weighted_6m'], color='salmon')
+        plt.plot(df['y_pred_weighted_3m'], color='red')
+        plt.plot(df['y_pred_weighted_1m'], color='brown')
+        plt.ylabel('crash probability')
+        plt.ylim([0, 1.1])
+        plt.xticks(rotation=45)
+        plt.legend(['crash in 6 months', 'crash in 3 months', 'crash in 1 month'])
+
+        # Instead of plt.show(), directly pass the figure object to st.pyplot()
+        # fig = plt.gcf()
+        # st.pyplot(fig)
+
+        # Creating second set of plots
+        fig2, ax2 = plt.subplots()
+        gs = gridspec.GridSpec(2, 1, height_ratios=[2.5, 1])
+        #
+        plt.subplot(gs[0])
+        plt.plot(df1['norm'], color='blue')
+        y=[plt.axvspan(x1, x2, alpha=0.5, color='red') for x1, x2 in
+         zip(crash_history['crash_st'], crash_history['crash_end'])]
+        plt.plot(df1['drawdown'], color='red', marker='v', linestyle='')
+        plt.title(' - crashes: Weibull outliers')
+        plt.grid()
+        plt.xticks([])
+        plt.legend(['Price', 'Drawdown'])
+        #
+        plt.subplot(gs[1])
+        plt.plot(df1['vol'])
+        y=[plt.axvspan(x1, x2, alpha=0.5, color='red') for x1, x2 in
+         zip(crash_history['crash_st'], crash_history['crash_end'])]
+        plt.legend(['Volatility'])
+        plt.grid()
+        plt.tight_layout()
+
+        # Instead of plt.show(), directly pass the figure object to st.pyplot()
+        fig2 = plt.gcf()
+        st.pyplot(fig)
+        st.pyplot(fig2)
